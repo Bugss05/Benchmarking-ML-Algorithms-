@@ -23,7 +23,7 @@ class NeuralNet(BaseEstimator):
     fit_required = False
 
     def __init__(
-        self, layers, optimizer, loss, max_epochs=10, batch_size=64, metric="mse", shuffle=False, verbose=True
+        self, layers, optimizer, loss, max_epochs=10, batch_size=64, metric="mse", shuffle=False, verbose=True,testarerros=False
     ):
         self.verbose = verbose
         self.shuffle = shuffle
@@ -36,6 +36,10 @@ class NeuralNet(BaseEstimator):
             self.loss_grad = lambda actual, predicted: -(actual - predicted)
         else:
             self.loss_grad = elementwise_grad(self.loss, 1)
+
+        self.error_list=[]
+        self.metric_list=[]
+        self.testar_differros=testarerros
         self.metric = get_metric(metric)
         self.layers = layers
         self.batch_size = batch_size
@@ -46,6 +50,7 @@ class NeuralNet(BaseEstimator):
         self.bprop_entry = self._find_bprop_entry()
         self.training = False
         self._initialized = False
+
 
     def _setup_layers(self, x_shape):
         """Initialize model's layers."""
@@ -69,14 +74,16 @@ class NeuralNet(BaseEstimator):
             return -1
         return len(self.layers)
 
-    def fit(self, X, y=None):
+    def fit(self, X, y=None,xtest=None,ytest=None):
         if not self._initialized:
             self._setup_layers(X.shape)
 
         if y.ndim == 1:
             # Reshape vector to matrix
             y = y[:, np.newaxis]
-        self._setup_input(X, y)
+        if xtest!= None or ytest!=None:
+            self._setup_input(X, y,xtest,ytest)
+        else :self._setup_input(X, y)
 
         self.is_training = True
         # Pass neural network instance to an optimizer
@@ -123,7 +130,7 @@ class NeuralNet(BaseEstimator):
             params.append(layer.parameters)
         return params
 
-    def error(self, X=None, y=None):
+    def error(self, X=None, y=None,testar=False):
         """Calculate an error for given examples."""
         training_phase = self.is_training
         if training_phase:
@@ -132,13 +139,19 @@ class NeuralNet(BaseEstimator):
             self.is_training = False
         if X is None and y is None:
             y_pred = self._predict(self.X)
-            score = self.metric(self.y, y_pred)
+            trainscore = self.metric(self.y, y_pred)
         else:
             y_pred = self._predict(X)
-            score = self.metric(y, y_pred)
+            trainscore = self.metric(y, y_pred)
+            
+        if testar:
+            y_pred = self._predict(self.X_test)
+            testscore = self.metric(self.Y_test, y_pred)
+            self.error_list.append((trainscore, testscore))
+
         if training_phase:
             self.is_training = True
-        return score
+        return trainscore
 
     @property
     def is_training(self):

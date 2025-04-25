@@ -79,7 +79,6 @@ mse = mean_squared_error
 rmse = root_mean_squared_error
 mae = mean_absolute_error
 
-
 def get_metric(name):
     """Return metric function by name"""
     try:

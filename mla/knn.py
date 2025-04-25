@@ -6,7 +6,7 @@ import numpy as np
 from scipy.spatial.distance import euclidean
 
 from mla.base import BaseEstimator
-
+c
 
 class KNNBase(BaseEstimator):
     def __init__(self, k=5, distance_func=euclidean):

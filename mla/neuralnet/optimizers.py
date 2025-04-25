@@ -24,10 +24,11 @@ class Optimizer(object):
             start_time = time.time()
             loss = self.train_epoch(network)
             loss_history.append(loss)
+            
             if network.verbose:
                 msg = "Epoch:%s, train loss: %s" % (i, loss)
                 if network.log_metric:
-                    msg += ", train %s: %s" % (network.metric_name, network.error())
+                    msg += ", train %s: %s" % (network.metric_name, network.error(testar=network.testar_differros))
                 msg += ", elapsed: %s sec." % (time.time() - start_time)
                 logging.info(msg)
         return loss_history

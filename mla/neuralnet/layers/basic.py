@@ -76,7 +76,7 @@ class Dense(Layer, ParamMixin):
         W = np.dot(X, self._params["W"])
         return W + self._params["b"]
 
-    def backward_pass(self, delta):
+    def backward_pass(self, delta):# delta is the loss values 
         dW = np.dot(self.last_input.T, delta)
         db = np.sum(delta, axis=0)
 
