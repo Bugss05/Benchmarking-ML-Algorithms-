@@ -20,6 +20,7 @@ class BaseEstimator:
         Y_test : array-like, optional
             Target values for testing.
         """
+        
         # Setup for training data
         if not isinstance(X, np.ndarray):
             X = np.array(X)
@@ -70,6 +71,7 @@ class BaseEstimator:
         else:
             self.X_test = None
             self.Y_test = None
+        
     
     def fit(self, X, y=None):
         self._setup_input(X, y)

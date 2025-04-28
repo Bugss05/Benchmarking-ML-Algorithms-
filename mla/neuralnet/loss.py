@@ -1,4 +1,4 @@
-from ..metrics import mse, logloss, mae, hinge, binary_crossentropy
+from ..metrics import mse, logloss, mae, hinge, binary_crossentropy,automatic_weighted_binary_crossentropy
 categorical_crossentropy = logloss
 
 

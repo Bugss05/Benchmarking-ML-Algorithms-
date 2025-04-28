@@ -17,25 +17,66 @@ Architecture inspired from:
     https://github.com/fchollet/keras
     https://github.com/andersbll/deeppy
 """
+import numpy as np
 
+def gradient_automatic_weighted_bce(actual, predicted, zeros,uns,EPS=1e-8):
+    """
+    Calcula o gradiente da função de perda automatic_weighted_binary_crossentropy.
+
+    Args:
+    - actual (array-like): Lista ou vetor de rótulos reais (0 ou 1).
+    - predicted (array-like): Lista ou vetor de probabilidades previstas para a classe positiva.
+    - EPS (float): Pequeno valor para evitar divisão por zero.
+
+    Returns:
+    - gradient (array): Gradiente da perda em relação às previsões.
+    """
+    # Garantir que predicted esteja dentro do intervalo [EPS, 1 - EPS]
+    predicted = np.clip(predicted, EPS, 1 - EPS)
+    
+    # Contagem das ocorrências de cada classe
+
+    total_count = len(actual)
+    
+    # Calcular o peso das classes
+    weight_0 = total_count / (2.0 * zeros)  # Peso classe 0
+    weight_1 = total_count / (2.0 * uns)  # Peso classe 1
+    
+    # Inicializar gradiente
+    gradient = np.zeros_like(predicted)
+    
+    # Máscaras para as classes
+    mask_0 = (actual == 0)
+    mask_1 = (actual == 1)
+    
+    # Gradiente para exemplos da classe 0
+    gradient[mask_0] = weight_0 / (1 - predicted[mask_0])
+    
+    # Gradiente para exemplos da classe 1
+    gradient[mask_1] = -weight_1 / predicted[mask_1]
+    
+    # Média dos gradientes (pois a loss é a média)
+    gradient = gradient / total_count
+    
+    return gradient
 
 class NeuralNet(BaseEstimator):
     fit_required = False
 
     def __init__(
-        self, layers, optimizer, loss, max_epochs=10, batch_size=64, metric="mse", shuffle=False, verbose=True,testarerros=False
+        self, layers, optimizer, loss, max_epochs=10, batch_size=64, metric="mse", shuffle=False, verbose=True,testarerros=False,zeros=0,uns=0
     ):
         self.verbose = verbose
         self.shuffle = shuffle
         self.optimizer = optimizer
 
         self.loss = get_loss(loss)
-
+        self.loss_name = loss
         # TODO: fix
         if loss == "categorical_crossentropy":
             self.loss_grad = lambda actual, predicted: -(actual - predicted)
         else:
-            self.loss_grad = elementwise_grad(self.loss, 1)
+            self.loss_grad = elementwise_grad(self.loss,1)
 
         self.error_list=[]
         self.metric_list=[]
@@ -50,6 +91,8 @@ class NeuralNet(BaseEstimator):
         self.bprop_entry = self._find_bprop_entry()
         self.training = False
         self._initialized = False
+        self.uns=uns
+        self.zeros=zeros
 
 
     def _setup_layers(self, x_shape):
@@ -65,7 +108,7 @@ class NeuralNet(BaseEstimator):
         # Setup optimizer
         self.optimizer.setup(self)
         self._initialized = True
-        logging.info("Total parameters: %s" % self.n_params)
+        #logging.info("Total parameters: %s" % self.n_params)
 
     def _find_bprop_entry(self):
         """Find entry layer for back propagation."""
@@ -75,15 +118,17 @@ class NeuralNet(BaseEstimator):
         return len(self.layers)
 
     def fit(self, X, y=None,xtest=None,ytest=None):
+        
         if not self._initialized:
             self._setup_layers(X.shape)
-
+        
         if y.ndim == 1:
             # Reshape vector to matrix
             y = y[:, np.newaxis]
-        if xtest!= None or ytest!=None:
-            self._setup_input(X, y,xtest,ytest)
-        else :self._setup_input(X, y)
+        if xtest is not None or ytest is not None:
+            self._setup_input(X, y, xtest, ytest)
+        else:
+            self._setup_input(X, y)
 
         self.is_training = True
         # Pass neural network instance to an optimizer
@@ -95,10 +140,15 @@ class NeuralNet(BaseEstimator):
         y_pred = self.fprop(X)
 
         # Backward pass
-        grad = self.loss_grad(y, y_pred)
+        if self.loss_name == "automatic_weighted_binary_crossentropy":
+            grad = gradient_automatic_weighted_bce(y, y_pred, self.zeros,self.uns)
+        else :grad = self.loss_grad(y, y_pred)
         for layer in reversed(self.layers[: self.bprop_entry]):
             grad = layer.backward_pass(grad)
-        return self.loss(y, y_pred)
+
+        if self.loss_name == "automatic_weighted_binary_crossentropy":
+            return self.loss(y, y_pred,self.zeros,self.uns)
+        else : return self.loss(y, y_pred)
 
     def fprop(self, X):
         """Forward propagation."""
@@ -107,7 +157,7 @@ class NeuralNet(BaseEstimator):
         return X
 
     def _predict(self, X=None):
-        if not self._initialized:
+        if not self._initialized or (self.testar_differros and self._initialized):
             self._setup_layers(X.shape)
 
         y = []
@@ -139,14 +189,14 @@ class NeuralNet(BaseEstimator):
             self.is_training = False
         if X is None and y is None:
             y_pred = self._predict(self.X)
-            trainscore = self.metric(self.y, y_pred)
+            trainscore,th = self.metric(self.y, y_pred)
         else:
             y_pred = self._predict(X)
-            trainscore = self.metric(y, y_pred)
+            trainscore ,th= self.metric(y, y_pred)
             
         if testar:
             y_pred = self._predict(self.X_test)
-            testscore = self.metric(self.Y_test, y_pred)
+            testscore ,thl= self.metric(self.Y_test, y_pred,th)
             self.error_list.append((trainscore, testscore))
 
         if training_phase:
