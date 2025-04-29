@@ -1,7 +1,0 @@
-*.pyc
-build/
-dist/
-mla.egg-info/
-.cache
-*.swp
-.idea
