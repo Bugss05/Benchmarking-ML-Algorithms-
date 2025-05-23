@@ -181,6 +181,141 @@ def recall(actual, predicted, threshold=None):
     # Se já são labels 0/1, calcula normal
     return sk_recall_score(actual, predicted, average="weighted"), best_threshold
 
+
+
+def focal_loss_weighted(actual, predicted, EPS=1e-8, gamma=2.0, alpha=0.85):
+    """
+    Focal Loss binária com peso para classe positiva.
+
+    Args:
+        actual (array-like): rótulos reais (0 ou 1).
+        predicted (array-like): probabilidades previstas p = P(y=1).
+        EPS (float): valor pequeno para evitar log(0).
+        gamma (float): parâmetro de focalização.
+        alpha (float): peso para classe positiva (entre 0 e 1).
+
+    Returns:
+        float: valor médio da Focal Loss.
+    """
+    y = np.asarray(actual).astype(np.float32)
+    p = np.clip(np.asarray(predicted), EPS, 1 - EPS)
+
+    loss_pos = - alpha * (1 - p)**gamma * np.log(p) * y
+    loss_neg = - (1 - alpha) * p**gamma * np.log(1 - p) * (1 - y)
+
+    return np.mean(loss_pos + loss_neg)
+
+
+def gradient_automatic_weighted_bce(actual, predicted, EPS: float = 1e-8, pos_weight: float = 1.0) -> np.ndarray:
+    """
+    Calcula o gradiente da perda Binary Cross-Entropy (BCE) ponderada automáticamente,
+    aceitando saída sigmoid com um ou dois neurônios (probabilidades de classe).
+
+    Se `predicted` tem shape (N,) assume como probabilidades p1 (classe positiva).
+    Se `predicted` tem shape (N,2) assume [p0,p1] de duas sigmoids independentes.
+
+    Args:
+        actual: array-like rótulos 0/1 ou one-hot (N,2).
+        predicted: array-like probabilidades p1 (N,) ou [p0,p1] (N,2).
+        EPS: valor para clipping de probabilidades.
+        pos_weight: fator >1 para aumentar peso da classe positiva.
+
+    Returns:
+        np.ndarray gradientes dL/dp com mesma forma de `predicted`.
+
+    Raises:
+        ValueError: se shapes de `actual` e `predicted` não coincidirem em N.
+    """
+    # Converter para numpy
+    actual_arr = np.asarray(actual)
+    pred_arr = np.asarray(predicted)
+
+    # Extrair labels
+    if actual_arr.ndim > 1 and actual_arr.shape[1] == 2:
+        labels = np.argmax(actual_arr, axis=1)
+    else:
+        labels = actual_arr.flatten().astype(int)
+    N = labels.size
+
+    # Processar diferentes formatos de predicted
+    if pred_arr.ndim == 2 and pred_arr.shape[1] == 2:
+        # Duas sigmoids independentes: col0 = p0, col1 = p1
+        p0 = pred_arr[:, 0].flatten()
+        p1 = pred_arr[:, 1].flatten()
+        if p0.size != N or p1.size != N:
+            raise ValueError(f"Shape mismatch: actual {N}, predicted {pred_arr.shape}")
+        # Clipping
+        p0 = np.clip(p0, EPS, 1 - EPS)
+        p1 = np.clip(p1, EPS, 1 - EPS)
+    else:
+        # Vetor de probabilidades p1
+        p1 = pred_arr.flatten()
+        if p1.size != N:
+            raise ValueError(f"Shape mismatch: actual {N}, predicted {p1.size}")
+        p1 = np.clip(p1, EPS, 1 - EPS)
+        p0 = 1 - p1
+
+    # Contagens de classes
+    n0 = int(np.sum(labels == 0)) or 1
+    n1 = int(np.sum(labels == 1)) or 1
+
+    # Pesos
+    w0 = N / (2.0 * n0)
+    w1 = (N / (2.0 * n1)) * pos_weight
+
+    # Gradientes BCE ponderados
+    # para p1: dL/dp1 = [-(y * w1)/p1 + ((1-y) * w0)/p0] / N
+    grad_p1 = (-(labels * w1) / p1 + ((1 - labels) * w0) / p0) / N
+    # para p0: dL/dp0 = - (grad_p1)  (derivada simétrica)
+    grad_p0 = -grad_p1
+
+    # Montar saída
+    if pred_arr.ndim == 2 and pred_arr.shape[1] == 2:
+        grad = np.stack([grad_p0, grad_p1], axis=1)
+    else:
+        grad = grad_p1
+
+    return grad
+
+
+def gradient_focal_loss_weighted(actual, predicted, EPS=1e-8, gamma=2.0, alpha=0.85):
+    """
+    Gradiente da Focal Loss binária ponderada com alpha.
+
+    Args:
+        actual: array-like de rótulos reais (0 ou 1).
+        predicted: array-like de probabilidades previstas p = P(y=1).
+        EPS: valor para evitar log(0) e divisões por 0.
+        gamma: parâmetro de focalização.
+        alpha: peso da classe positiva.
+
+    Returns:
+        grad: array-like com os gradientes dL/dp para cada exemplo.
+    """
+    y = np.asarray(actual).astype(np.float32)
+    p = np.clip(np.asarray(predicted), EPS, 1 - EPS)
+
+    # Derivada da focal loss para cada ponto
+    grad_pos = -alpha * ((1 - p) ** gamma) * (gamma * np.log(p) / (1 - p) + 1 / p)
+    grad_neg = -(1 - alpha) * (p ** gamma) * (gamma * np.log(1 - p) / p - 1 / (1 - p))
+
+    grad = y * grad_pos + (1 - y) * grad_neg
+
+    return grad / y.shape[0]  # média para manter compatível com loss.mean()
+
+def gradient_categorical_crossentropy(actual, predicted):
+    """
+    Computes the gradient of the categorical cross-entropy loss with respect to the predictions.
+
+    Args:
+        actual (array-like): rótulos reais (0 ou 1).
+        predicted (array-like): probabilidades previstas p = P(y=1).
+
+    Returns:
+        np.ndarray: Gradient of the loss, same shape as predicted.
+    """
+    return - (actual - predicted)
+
 # aliases
 mse = mean_squared_error
 rmse = root_mean_squared_error

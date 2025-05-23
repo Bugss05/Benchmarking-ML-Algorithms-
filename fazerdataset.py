@@ -124,7 +124,7 @@ def processar_modelos_subset(dataset,
                               gmean=False,
                               confusion_matrix=False,
                               prec_recall_curve=False,
-                              modo_visual='both'):
+                              modo_visual='todos'):
     """
     Itera por todos os ficheiros únicos no dataset e chama a função de plotagem
     para cada conjunto de entradas com o mesmo nome de ficheiro.
@@ -134,7 +134,6 @@ def processar_modelos_subset(dataset,
 
     for nome_ficheiro in ficheiros_unicos:
         subset = dataset[dataset['ficheiro'] == nome_ficheiro]
-        print(f"Processando ficheiro: {nome_ficheiro} ({len(subset)} entradas)")
 
         plotar_graficos(
             subset,
@@ -150,9 +149,6 @@ def processar_modelos_subset(dataset,
 
         )
 
-        
-import pandas as pd
-
 
 def plotar_graficos(dados, 
                                roc_curve=False, 
@@ -162,8 +158,9 @@ def plotar_graficos(dados,
                                prec_recall=False,
                                roc_vs_ratio=False,
                                prec_rec_vs_ratio=False,
+                               gmean_vs_ratio=False,
                                modo_ratio='weighted',
-                               modo_visual='both'):
+                               modo_visual='todos'):
     """
     Se for passado um caminho (str), carrega o dataset completo.
     Se for passado um DataFrame, trata como subset.
@@ -217,6 +214,8 @@ def plotar_graficos(dados,
         if prec_rec_vs_ratio:
             metrics.extend(['precision', 'recall'])
 
+        if gmean_vs_ratio:
+            metrics.append('gmean')
         if metrics:
             plot_metrics_vs_imbalance(
                 dataset,
@@ -237,67 +236,64 @@ def plot_roc_curve(subset, modo='todos'):
         subset: O subset dos dados que contém as informações de cada modelo.
         modo: O modo de plotagem ('unico', 'individual', ou 'todos').
     """
-    if modo == 'unico' or modo == 'todos':
+    if modo == 'juntos' or modo == 'todos':
         # Gerar um único gráfico com todas as curvas ROC
         plt.figure(figsize=(8, 6))
-
+        
         for i, row in subset.iterrows():
-            try:
-                y_test = json.loads(row['test_out'])
-                probs = json.loads(row['probs'])
-                epocas = int(row['epocas'])
+                
+            y_test = json.loads(row['test_out'])
+            probs = json.loads(row['probs'])
+            epocas = int(row['epocas'])
+            # Aceder às probabilidades do conjunto de teste na última época
+            y_test = np.array(y_test)
 
-                # Aceder às probabilidades do conjunto de teste na última época
-                prob_test = probs[epocas - 1][1]  # [1] = test
-
-                # Calcular curva ROC e AUC
-                fpr, tpr, _ = roc_curve(y_test, prob_test)
-                roc_auc = auc(fpr, tpr)
-
-                # Adicionar curva ao gráfico
-                plt.plot(fpr, tpr, label=f"{row['ficheiro']} (AUC = {roc_auc:.2f})")
-
-            except Exception as e:
-                print(f"Erro ao processar linha {i}: {e}")
+            # Acessar probabilidades da classe positiva (teste)
+            prob_test = np.array(probs[epocas - 1][1])[:, 1]  # <--- Correção aqui
+            # Calcular curva ROC e AUC
+            fpr, tpr, _ = roc_curve(y_test, prob_test)
+            roc_auc = auc(fpr, tpr)
+            # Adicionar curva ao gráfico
+            
+            plt.plot(fpr, tpr, label=f"{row['loss_nome']} (AUC = {roc_auc:.2f})")
 
         plt.plot([0, 1], [0, 1], 'k--')  # Linha diagonal
         plt.xlabel('False Positive Rate')
         plt.ylabel('True Positive Rate')
-        plt.title('Curvas ROC - Última Época (Test)')
+        plt.title(f"{row['ficheiro']} - Curvas ROC")
         plt.legend()
         plt.grid(True)
         plt.tight_layout()
         plt.show()
 
-    if modo == 'individual' or modo == 'todos':
+    if modo == 'cada' or modo == 'todos':
         # Gerar gráficos individuais para cada linha do subset
         for i, row in subset.iterrows():
-            try:
-                y_test = json.loads(row['test_out'])
-                probs = json.loads(row['probs'])
-                epocas = int(row['epocas'])
+            y_test = json.loads(row['test_out'])
+            probs = json.loads(row['probs'])
+            epocas = int(row['epocas'])
 
-                # Aceder às probabilidades do conjunto de teste na última época
-                prob_test = probs[epocas - 1][1]  # [1] = test
+            # Aceder às probabilidades do conjunto de teste na última época
+            prob_test = np.array(probs[epocas - 1][1])[:, 1]  # [1] = test
+            y_test = np.array(y_test)
 
-                # Calcular curva ROC e AUC
-                fpr, tpr, _ = roc_curve(y_test, prob_test)
-                roc_auc = auc(fpr, tpr)
+            if y_test.ndim == 2:  # If one-hot encoded, convert to 1D
+                y_test = np.argmax(y_test, axis=1)
+            # Calcular curva ROC e AUC
+            fpr, tpr, _ = roc_curve(y_test, prob_test)
+            roc_auc = auc(fpr, tpr)
 
-                # Criar gráfico individual
-                plt.figure(figsize=(6, 5))
-                plt.plot(fpr, tpr, label=f"AUC = {roc_auc:.2f}")
-                plt.plot([0, 1], [0, 1], 'k--')
-                plt.xlabel('False Positive Rate')
-                plt.ylabel('True Positive Rate')
-                plt.title(f"ROC - {row['ficheiro']}")
-                plt.legend()
-                plt.grid(True)
-                plt.tight_layout()
-                plt.show()
-
-            except Exception as e:
-                print(f"Erro ao processar linha {i} ({row['ficheiro']}): {e}")
+            # Criar gráfico individual
+            plt.figure(figsize=(6, 5))
+            plt.plot(fpr, tpr, label=f"AUC = {roc_auc:.2f}, {row['loss_nome']}")
+            plt.plot([0, 1], [0, 1], 'k--')
+            plt.xlabel('False Positive Rate')
+            plt.ylabel('True Positive Rate')
+            plt.title(f"ROC - {row['ficheiro']}")
+            plt.legend()
+            plt.grid(True)
+            plt.tight_layout()
+            plt.show()
 
 def plot_f1_score(subset, modo="cada"):
     """
@@ -309,69 +305,63 @@ def plot_f1_score(subset, modo="cada"):
     """
     def plot_cada():
         for i, row in subset.iterrows():
-            try:
-                y_train = json.loads(row['train_out'])
-                y_test = json.loads(row['test_out'])
-                probs = json.loads(row['probs'])
-                epocas = int(row['epocas'])
 
-                f1_train_weighted = []
-                f1_test_weighted = []
+            y_train = json.loads(row['train_out'])
+            y_test = json.loads(row['test_out'])
+            probs = json.loads(row['probs'])
+            epocas = int(row['epocas'])
+            f1_train_weighted = []
+            f1_test_weighted = []
 
-                for epoch in range(epocas):
-                    y_train_pred = [1 if prob[0] > prob[1] else 0 for prob in probs[epoch][0]]
-                    y_test_pred = [1 if prob[0] > prob[1] else 0 for prob in probs[epoch][1]]
+            for epoch in range(epocas):
+                y_train_pred = [0 if prob[0] > prob[1] else 1 for prob in probs[epoch][0]]
+                y_test_pred = [0 if prob[0] > prob[1] else 1 for prob in probs[epoch][1]]
+                f1_train_weighted.append(f1_score(y_train, y_train_pred, average='weighted'))
+                f1_test_weighted.append(f1_score(y_test, y_test_pred, average='weighted'))
 
-                    f1_train_weighted.append(f1_score(y_train, y_train_pred, average='weighted'))
-                    f1_test_weighted.append(f1_score(y_test, y_test_pred, average='weighted'))
+            plt.figure(figsize=(6, 5))
+            plt.plot(range(1, epocas+1), f1_train_weighted, label=f'Train -{row["loss_nome"]}', marker='o')
+            plt.plot(range(1, epocas+1), f1_test_weighted, label=f'Test -{row["loss_nome"]}', marker='x')
+            plt.xlabel('Época')
+            plt.ylabel('F1 Score')
+            plt.title(f'F1 Score - {row["ficheiro"]}')
+            plt.legend()
+            plt.grid(True)
+            plt.ylim(0, 1)
+            plt.tight_layout()
+            plt.show()
 
-                plt.figure(figsize=(6, 5))
-                plt.plot(range(1, epocas+1), f1_train_weighted, label='Train', marker='o')
-                plt.plot(range(1, epocas+1), f1_test_weighted, label='Test', marker='x')
-                plt.xlabel('Época')
-                plt.ylabel('F1 Score Ponderado')
-                plt.title(f'F1 Score Ponderado - {row["ficheiro"]}')
-                plt.legend()
-                plt.grid(True)
-                plt.tight_layout()
-                plt.show()
 
-            except Exception as e:
-                print(f"Erro na linha {i} ({row['ficheiro']}): {e}")
-
-    def plot_todos():
+    def plot_juntos():
         plt.figure(figsize=(8, 6))
         for i, row in subset.iterrows():
-            try:
-                y_test = json.loads(row['test_out'])
-                probs = json.loads(row['probs'])
-                epocas = int(row['epocas'])
+            y_test = json.loads(row['test_out'])
+            probs = json.loads(row['probs'])
+            epocas = int(row['epocas'])
+            f1_test_weighted = []
+            for epoch in range(epocas):
+                y_test_pred = [0 if prob[0] > prob[1] else 1 for prob in probs[epoch][1]]
+                f1_test_weighted.append(f1_score(y_test, y_test_pred, average='weighted'))
 
-                f1_test_weighted = []
-                for epoch in range(epocas):
-                    y_test_pred = [1 if prob[0] > prob[1] else 0 for prob in probs[epoch][1]]
-                    f1_test_weighted.append(f1_score(y_test, y_test_pred, average='weighted'))
-
-                plt.plot(range(1, epocas+1), f1_test_weighted, label=row['ficheiro'])
-
-            except Exception as e:
-                print(f"Erro na linha {i} ({row['ficheiro']}): {e}")
+            plt.plot(range(1, epocas+1), f1_test_weighted, label=row['loss_nome'])
 
         plt.xlabel('Época')
-        plt.ylabel('F1 Score Ponderado (Teste)')
-        plt.title('F1 Score Ponderado - Todos os Modelos')
+        plt.ylabel('F1 Score (Teste)')
+        plt.title(f'F1 Score {row["ficheiro"]} - Todos os Modelos')
         plt.legend()
+        plt.ylim(0, 1)
         plt.grid(True)
         plt.tight_layout()
         plt.show()
 
     if modo == "cada":
         plot_cada()
+    elif modo == "juntos":
+        plot_juntos()
     elif modo == "todos":
-        plot_todos()
-    elif modo == "ambos":
         plot_cada()
-        plot_todos()
+        plot_juntos()
+    
 
 def plot_gmean_score(subset, modo="cada"):
     """
@@ -383,62 +373,54 @@ def plot_gmean_score(subset, modo="cada"):
     """
     def plot_cada():
         for i, row in subset.iterrows():
-            try:
-                y_train = json.loads(row['train_out'])
-                y_test = json.loads(row['test_out'])
-                probs = json.loads(row['probs'])
-                epocas = int(row['epocas'])
+            y_train = json.loads(row['train_out'])
+            y_test = json.loads(row['test_out'])
+            probs = json.loads(row['probs'])
+            epocas = int(row['epocas'])
+            gmean_train = []
+            gmean_test = []
 
-                gmean_train = []
-                gmean_test = []
+            for epoch in range(epocas):
+                y_train_pred = [0 if prob[0] > prob[1] else 1 for prob in probs[epoch][0]]
+                y_test_pred = [0 if prob[0] > prob[1] else 1 for prob in probs[epoch][1]]
+                recall_train = recall_score(y_train, y_train_pred, average=None)
+                recall_test = recall_score(y_test, y_test_pred, average=None)
+                gmean_train.append(np.sqrt(np.prod(recall_train)))
+                gmean_test.append(np.sqrt(np.prod(recall_test)))
 
-                for epoch in range(epocas):
-                    y_train_pred = [1 if prob[0] > prob[1] else 0 for prob in probs[epoch][0]]
-                    y_test_pred = [1 if prob[0] > prob[1] else 0 for prob in probs[epoch][1]]
+            plt.figure(figsize=(6, 5))
+            plt.plot(range(1, epocas+1), gmean_train, label='Train', marker='o')
+            plt.plot(range(1, epocas+1), gmean_test, label='Test', marker='x')
+            plt.xlabel('Época')
+            plt.ylabel('Gmean')
+            plt.title(f'Gmean por Época - {row["ficheiro"]}')
+            plt.legend()
+            plt.grid(True)
+            plt.tight_layout()
+            plt.show()
 
-                    recall_train = recall_score(y_train, y_train_pred, average=None)
-                    recall_test = recall_score(y_test, y_test_pred, average=None)
-
-                    gmean_train.append(np.sqrt(np.prod(recall_train)))
-                    gmean_test.append(np.sqrt(np.prod(recall_test)))
-
-                plt.figure(figsize=(6, 5))
-                plt.plot(range(1, epocas+1), gmean_train, label='Train', marker='o')
-                plt.plot(range(1, epocas+1), gmean_test, label='Test', marker='x')
-                plt.xlabel('Época')
-                plt.ylabel('Gmean')
-                plt.title(f'Gmean por Época - {row["ficheiro"]}')
-                plt.legend()
-                plt.grid(True)
-                plt.tight_layout()
-                plt.show()
-
-            except Exception as e:
-                print(f"Erro na linha {i} ({row['ficheiro']}): {e}")
 
     def plot_todos():
         plt.figure(figsize=(8, 6))
         for i, row in subset.iterrows():
-            try:
-                y_test = json.loads(row['test_out'])
-                probs = json.loads(row['probs'])
-                epocas = int(row['epocas'])
 
-                gmean_test = []
-                for epoch in range(epocas):
-                    y_test_pred = [1 if prob[0] > prob[1] else 0 for prob in probs[epoch][1]]
-                    recall_test = recall_score(y_test, y_test_pred, average=None)
-                    gmean_test.append(np.sqrt(np.prod(recall_test)))
+            y_test = json.loads(row['test_out'])
+            probs = json.loads(row['probs'])
+            epocas = int(row['epocas'])
+            gmean_test = []
 
-                plt.plot(range(1, epocas+1), gmean_test, label=row['ficheiro'])
+            for epoch in range(epocas):
+                y_test_pred = [0 if prob[0] > prob[1] else 1 for prob in probs[epoch][1]]
+                recall_test = recall_score(y_test, y_test_pred, average=None)
+                gmean_test.append(np.sqrt(np.prod(recall_test)))
 
-            except Exception as e:
-                print(f"Erro na linha {i} ({row['ficheiro']}): {e}")
+            plt.plot(range(1, epocas+1), gmean_test, label=row['loss_nome'])
 
         plt.xlabel('Época')
         plt.ylabel('Gmean (Teste)')
-        plt.title('Gmean - Todos os Modelos')
+        plt.title(f'Gmean por Época - {row["ficheiro"]}')
         plt.legend()
+        plt.ylim(0, 1)
         plt.grid(True)
         plt.tight_layout()
         plt.show()
@@ -463,25 +445,22 @@ def plot_confusion_matrix(subset, modo="cada"):
     """
     def plot_cada():
         for i, row in subset.iterrows():
-            try:
-                y_test = json.loads(row['test_out'])
-                probs = json.loads(row['probs'])
-                epocas = int(row['epocas'])
+            y_test = json.loads(row['test_out'])
+            probs = json.loads(row['probs'])
+            epocas = int(row['epocas'])
 
-                # Pegar as probabilidades da última época (teste)
-                probs_ultima_epoca = probs[epocas - 1][1]
-                y_pred = [1 if prob[0] > prob[1] else 0 for prob in probs_ultima_epoca]
+            # Pegar as probabilidades da última época (teste)
+            probs_ultima_epoca = probs[epocas - 1][1]
+            y_pred = [0 if prob[0] > prob[1] else 1 for prob in probs_ultima_epoca]
+            cm = confusion_matrix(y_test, y_pred)
 
-                cm = confusion_matrix(y_test, y_pred)
-                disp = ConfusionMatrixDisplay(confusion_matrix=cm)
-                disp.plot()
-                plt.title(f'Matriz de Confusão - {row["ficheiro"]}')
-                plt.grid(False)
-                plt.tight_layout()
-                plt.show()
+            disp = ConfusionMatrixDisplay(confusion_matrix=cm)
+            disp.plot()
+            plt.title(f'Matriz de Confusão - {row["loss_nome"]}')
+            plt.grid(False)
+            plt.tight_layout()
+            plt.show()
 
-            except Exception as e:
-                print(f"Erro na linha {i} ({row['ficheiro']}): {e}")
 
     def plot_todos():
         fig, axes = plt.subplots(nrows=1, ncols=len(subset), figsize=(5 * len(subset), 4))
@@ -489,24 +468,22 @@ def plot_confusion_matrix(subset, modo="cada"):
             axes = [axes]  # garantir que seja iterável
 
         for ax, (i, row) in zip(axes, subset.iterrows()):
-            try:
-                y_test = json.loads(row['test_out'])
-                probs = json.loads(row['probs'])
-                epocas = int(row['epocas'])
 
-                probs_ultima_epoca = probs[epocas - 1][1]
-                y_pred = [1 if prob[0] > prob[1] else 0 for prob in probs_ultima_epoca]
+            y_test = json.loads(row['test_out'])
+            probs = json.loads(row['probs'])
+            epocas = int(row['epocas'])
+            probs_ultima_epoca = probs[epocas - 1][1]
 
-                cm = confusion_matrix(y_test, y_pred)
-                disp = ConfusionMatrixDisplay(confusion_matrix=cm)
-                disp.plot(ax=ax, colorbar=False)
-                ax.set_title(f"{row['ficheiro']}")
-                ax.grid(False)
+            y_pred = [0 if prob[0] > prob[1] else 1 for prob in probs_ultima_epoca]
 
-            except Exception as e:
-                print(f"Erro na linha {i} ({row['ficheiro']}): {e}")
+            cm = confusion_matrix(y_test, y_pred)
+            disp = ConfusionMatrixDisplay(confusion_matrix=cm)
+            disp.plot(ax=ax, colorbar=False)
+            ax.set_title(f"{row['loss_nome']}")
+            ax.grid(False)
 
-        plt.suptitle("Matrizes de Confusão - Última Época", fontsize=14)
+
+        plt.suptitle(f"Matrizes de Confusão {row['ficheiro']} ", fontsize=14)
         plt.tight_layout()
         plt.show()
 
@@ -530,46 +507,37 @@ def plot_precision_recall_curve_final(subset, modo="cada"):
     """
     def plot_cada():
         for i, row in subset.iterrows():
-            try:
-                y_test = json.loads(row['test_out'])
-                probs = json.loads(row['probs'])
-                epocas = int(row['epocas'])
+            y_test = json.loads(row['test_out'])
+            probs = json.loads(row['probs'])
+            epocas = int(row['epocas'])
 
-                probs_ultima_epoca = probs[epocas - 1][1]
-                # Pegamos apenas as probabilidades da classe positiva
-                prob_pos = [p[1] for p in probs_ultima_epoca]
+            # Pegamos apenas as probabilidades da classe positiva
+            prob_pos = [p[1] for p in probs[epocas - 1][1]]
+            precision, recall, _ = precision_recall_curve(y_test, prob_pos)
+            disp = PrecisionRecallDisplay(precision=precision, recall=recall)
+            disp.plot()
 
-                precision, recall, _ = precision_recall_curve(y_test, prob_pos)
-
-                disp = PrecisionRecallDisplay(precision=precision, recall=recall)
-                disp.plot()
-                plt.title(f'Precision-Recall Curve - {row["ficheiro"]}')
-                plt.grid(True)
-                plt.tight_layout()
-                plt.show()
-
-            except Exception as e:
-                print(f"Erro na linha {i} ({row['ficheiro']}): {e}")
+            plt.title(f'Precision-Recall Curve - {row["ficheiro"]}')
+            plt.grid(True)
+            plt.tight_layout()
+            plt.show()
 
     def plot_todos():
         plt.figure(figsize=(8, 6))
         for i, row in subset.iterrows():
-            try:
-                y_test = json.loads(row['test_out'])
-                probs = json.loads(row['probs'])
-                epocas = int(row['epocas'])
+            y_test = json.loads(row['test_out'])
+            probs = json.loads(row['probs'])
+            epocas = int(row['epocas'])
+            prob_pos = [p[1] for p in probs[epocas - 1][1]]
+            precision, recall, _ = precision_recall_curve(y_test, prob_pos)
 
-                prob_pos = [p[1] for p in probs[epocas - 1][1]]
-                precision, recall, _ = precision_recall_curve(y_test, prob_pos)
-
-                plt.plot(recall, precision, label=row['ficheiro'])
-
-            except Exception as e:
-                print(f"Erro na linha {i} ({row['ficheiro']}): {e}")
+            # Usando PrecisionRecallDisplay para cada modelo
+            disp = PrecisionRecallDisplay(precision=precision, recall=recall)
+            disp.plot(ax=plt.gca(), name=row['loss_nome'])
 
         plt.xlabel('Recall')
         plt.ylabel('Precision')
-        plt.title('Precision-Recall Curve - Todos os Modelos')
+        plt.title(f'Precision-Recall Curve - Todos os Modelos')
         plt.legend()
         plt.grid(True)
         plt.tight_layout()
@@ -587,12 +555,17 @@ import json
 import matplotlib.pyplot as plt
 from sklearn.metrics import roc_curve, auc, precision_score, recall_score
 
+from sklearn.metrics import precision_score, recall_score, roc_curve, auc, confusion_matrix
+import matplotlib.pyplot as plt
+import json
+import numpy as np
+
 def plot_metrics_vs_imbalance(dataset, 
                               modo='all', 
                               x_metric='weighted',
-                              metrics=('roc', 'precision', 'recall')):
+                              metrics=('roc', 'precision', 'recall', 'gmean')):
     """
-    Compara várias métricas (ROC AUC, Precision e Recall) da última época (teste)
+    Compara várias métricas (ROC AUC, Precision, Recall, G-mean) da última época (teste)
     para cada loss em função do desequilíbrio de classes.
 
     Args:
@@ -608,27 +581,21 @@ def plot_metrics_vs_imbalance(dataset,
         x_metric (str): 
             - 'ratio'   → x = minor/major  
             - 'weighted'→ x = (minor/major) * total_samples  
-        metrics (tuple): métricas a plotar, subset de {'roc','precision','recall'}
+        metrics (tuple): métricas a plotar, subset de {'roc','precision','recall','gmean'}
     """
-    # agrupa por cada função de loss
     grupos = dataset.groupby('loss_nome')
-
-    # prepara dicionário loss → {x, roc, precision, recall}
     data = {}
+
     for loss, sub in grupos:
         xs = []
         ys = {m: [] for m in metrics}
         for _, row in sub.iterrows():
-            # carrega dados
             y_test = json.loads(row['test_out'])
             probs = json.loads(row['probs'])
             ep = int(row['epocas']) - 1
-            # probabilidades da classe positiva na última época
             p_pos = [p[1] for p in probs[ep][1]]
-            # predições ao threshold 0.5
-            y_pred = [1 if p>0.5 else 0 for p in p_pos]
+            y_pred = [1 if p > 0.5 else 0 for p in p_pos]
 
-            # calcula métricas
             if 'roc' in metrics:
                 fpr, tpr, _ = roc_curve(y_test, p_pos)
                 ys['roc'].append(auc(fpr, tpr))
@@ -636,23 +603,27 @@ def plot_metrics_vs_imbalance(dataset,
                 ys['precision'].append(precision_score(y_test, y_pred, zero_division=0))
             if 'recall' in metrics:
                 ys['recall'].append(recall_score(y_test, y_pred, zero_division=0))
+            if 'gmean' in metrics:
+                tn, fp, fn, tp = confusion_matrix(y_test, y_pred).ravel()
+                sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0
+                specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
+                gmean = np.sqrt(sensitivity * specificity)
+                ys['gmean'].append(gmean)
 
-            # calcula x
             n0, n1 = row['zeros'], row['uns']
             minor, major = (n1, n0) if n1 < n0 else (n0, n1)
-            ratio = minor/major if major>0 else 0
+            ratio = minor / major if major > 0 else 0
             total = n0 + n1
-            x = ratio * total if x_metric=='weighted' else ratio
+            x = ratio * total if x_metric == 'weighted' else ratio
             xs.append(x)
 
         data[loss] = {'x': xs, **ys}
 
-    # função interna de plot
     def _plot_all(metric):
-        plt.figure(figsize=(8,6))
+        plt.figure(figsize=(8, 6))
         for loss, vals in data.items():
             plt.scatter(vals['x'], vals[metric], label=loss)
-        plt.xlabel("Desequilíbrio (minor/major)" + (" × total" if x_metric=='weighted' else ""))
+        plt.xlabel("Desequilíbrio (minor/major)" + (" × total" if x_metric == 'weighted' else ""))
         plt.ylabel(metric.upper())
         plt.title(f"{metric.upper()} vs Desequilíbrio por Loss")
         plt.legend()
@@ -662,19 +633,24 @@ def plot_metrics_vs_imbalance(dataset,
 
     def _plot_each(metric):
         for loss, vals in data.items():
-            plt.figure(figsize=(6,5))
+            plt.figure(figsize=(6, 5))
             plt.scatter(vals['x'], vals[metric])
-            plt.xlabel("Desequilíbrio (minor/major)" + (" × total" if x_metric=='weighted' else ""))
+            plt.xlabel("Desequilíbrio (minor/major)" + (" × total" if x_metric == 'weighted' else ""))
             plt.ylabel(metric.upper())
             plt.title(f"{metric.upper()} vs Desequilíbrio\nLoss: {loss}")
             plt.grid(True)
             plt.tight_layout()
             plt.show()
 
-    # itera sobre métricas e modos
     for metric in metrics:
-        if modo in ('all','both'):
+        if modo in ('all', 'both', 'todos'):
             _plot_all(metric)
-        if modo in ('each','both'):
+        if modo in ('each', 'both', 'todos'):
             _plot_each(metric)
+
+df = pd.read_csv("resultados.csv")
+plotar_graficos("resultados.csv",
+                            gmean_vs_ratio=True,
+                            modo_ratio='weighted',
+                            modo_visual='todos')
 

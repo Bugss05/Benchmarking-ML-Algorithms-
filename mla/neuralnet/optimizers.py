@@ -31,6 +31,7 @@ class Optimizer(object):
                     msg += ", train %s: %s" % (network.metric_name, network.error(testar=network.testar_differros))
                 msg += ", elapsed: %s sec." % (time.time() - start_time)
                 logging.info(msg)
+        network.loss_history = loss_history
         return loss_history
 
     def update(self, network):
@@ -39,20 +40,22 @@ class Optimizer(object):
 
     def train_epoch(self, network):
         losses = []
-
         # Create batch iterator
-        X_batch = batch_iterator(network.X, network.batch_size)
-        y_batch = batch_iterator(network.y, network.batch_size)
-
+        if network.equilibrar_batches:
+            network.X, network.y = network.equilibrar_baches(X= network.X, y= network.y,batch_size= network.batch_size,equilibrar_batches= network.equilibrar_batches)
+        else :
+            X_batch = batch_iterator(network.X, batch_size=network.batch_size)
+            y_batch = batch_iterator(network.y, batch_size=network.batch_size)
         batch = zip(X_batch, y_batch)
         if network.verbose:
             batch = tqdm(batch, total=int(np.ceil(network.n_samples / network.batch_size)))
-
         for X, y in batch:
             loss = np.mean(network.update(X, y))
             self.update(network)
             losses.append(loss)
-
+        espectativas_train = network._predict(network.X)
+        espectativas_test = network._predict(network.X_test)
+        network.metric_list.append((espectativas_train, espectativas_test))
         epoch_loss = np.mean(losses)
         return epoch_loss
 
