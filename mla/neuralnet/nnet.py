@@ -7,6 +7,7 @@ from mla.base import BaseEstimator
 from mla.metrics.metrics import get_metric
 from mla.neuralnet.layers import PhaseMixin
 from mla.neuralnet.loss import get_loss
+from mla.neuralnet.loss_gradient import get_gradient_loss
 from mla.utils import batch_iterator
 
 np.random.seed(9999)
@@ -17,69 +18,102 @@ Architecture inspired from:
     https://github.com/fchollet/keras
     https://github.com/andersbll/deeppy
 """
-import numpy as np
 
-def gradient_automatic_weighted_bce(actual, predicted, zeros,uns,EPS=1e-8):
+
+def gradient_automatic_weighted_bce(actual, predicted, EPS: float = 1e-8, pos_weight: float = 1.0) -> np.ndarray:
     """
-    Calcula o gradiente da função de perda automatic_weighted_binary_crossentropy.
+    Calcula o gradiente da perda Binary Cross-Entropy (BCE) ponderada automáticamente,
+    aceitando saída sigmoid com um ou dois neurônios (probabilidades de classe).
+
+    Se `predicted` tem shape (N,) assume como probabilidades p1 (classe positiva).
+    Se `predicted` tem shape (N,2) assume [p0,p1] de duas sigmoids independentes.
 
     Args:
-    - actual (array-like): Lista ou vetor de rótulos reais (0 ou 1).
-    - predicted (array-like): Lista ou vetor de probabilidades previstas para a classe positiva.
-    - EPS (float): Pequeno valor para evitar divisão por zero.
+        actual: array-like rótulos 0/1 ou one-hot (N,2).
+        predicted: array-like probabilidades p1 (N,) ou [p0,p1] (N,2).
+        EPS: valor para clipping de probabilidades.
+        pos_weight: fator >1 para aumentar peso da classe positiva.
 
     Returns:
-    - gradient (array): Gradiente da perda em relação às previsões.
-    """
-    # Garantir que predicted esteja dentro do intervalo [EPS, 1 - EPS]
-    predicted = np.clip(predicted, EPS, 1 - EPS)
-    
-    # Contagem das ocorrências de cada classe
+        np.ndarray gradientes dL/dp com mesma forma de `predicted`.
 
-    total_count = len(actual)
-    
-    # Calcular o peso das classes
-    weight_0 = total_count / (2.0 * zeros)  # Peso classe 0
-    weight_1 = total_count / (2.0 * uns)  # Peso classe 1
-    
-    # Inicializar gradiente
-    gradient = np.zeros_like(predicted)
-    
-    # Máscaras para as classes
-    mask_0 = (actual == 0)
-    mask_1 = (actual == 1)
-    
-    # Gradiente para exemplos da classe 0
-    gradient[mask_0] = weight_0 / (1 - predicted[mask_0])
-    
-    # Gradiente para exemplos da classe 1
-    gradient[mask_1] = -weight_1 / predicted[mask_1]
-    
-    # Média dos gradientes (pois a loss é a média)
-    gradient = gradient / total_count
-    
-    return gradient
+    Raises:
+        ValueError: se shapes de `actual` e `predicted` não coincidirem em N.
+    """
+    # Converter para numpy
+    actual_arr = np.asarray(actual)
+    pred_arr = np.asarray(predicted)
+
+    # Extrair labels
+    if actual_arr.ndim > 1 and actual_arr.shape[1] == 2:
+        labels = np.argmax(actual_arr, axis=1)
+    else:
+        labels = actual_arr.flatten().astype(int)
+    N = labels.size
+
+    # Processar diferentes formatos de predicted
+    if pred_arr.ndim == 2 and pred_arr.shape[1] == 2:
+        # Duas sigmoids independentes: col0 = p0, col1 = p1
+        p0 = pred_arr[:, 0].flatten()
+        p1 = pred_arr[:, 1].flatten()
+        if p0.size != N or p1.size != N:
+            raise ValueError(f"Shape mismatch: actual {N}, predicted {pred_arr.shape}")
+        # Clipping
+        p0 = np.clip(p0, EPS, 1 - EPS)
+        p1 = np.clip(p1, EPS, 1 - EPS)
+    else:
+        # Vetor de probabilidades p1
+        p1 = pred_arr.flatten()
+        if p1.size != N:
+            raise ValueError(f"Shape mismatch: actual {N}, predicted {p1.size}")
+        p1 = np.clip(p1, EPS, 1 - EPS)
+        p0 = 1 - p1
+
+    # Contagens de classes
+    n0 = int(np.sum(labels == 0)) or 1
+    n1 = int(np.sum(labels == 1)) or 1
+
+    # Pesos
+    w0 = N / (2.0 * n0)
+    w1 = (N / (2.0 * n1)) * pos_weight
+
+    # Gradientes BCE ponderados
+    # para p1: dL/dp1 = [-(y * w1)/p1 + ((1-y) * w0)/p0] / N
+    grad_p1 = (-(labels * w1) / p1 + ((1 - labels) * w0) / p0) / N
+    # para p0: dL/dp0 = - (grad_p1)  (derivada simétrica)
+    grad_p0 = -grad_p1
+
+    # Montar saída
+    if pred_arr.ndim == 2 and pred_arr.shape[1] == 2:
+        grad = np.stack([grad_p0, grad_p1], axis=1)
+    else:
+        grad = grad_p1
+
+    return grad
+
+
+
 
 class NeuralNet(BaseEstimator):
     fit_required = False
 
     def __init__(
-        self, layers, optimizer, loss, max_epochs=10, batch_size=64, metric="mse", shuffle=False, verbose=True,testarerros=False,zeros=0,uns=0
-    ):
+        self , layers , filename , optimizer , loss , l2 ,
+         dropout , count_ones , count_zeros ,
+        max_epochs=10 , batch_size=64 , metric="mse",
+        shuffle = False , verbose=True , testarerros = False,
+        zeros=0, uns=0 , equilibrar_batches = False
+     ):
         self.verbose = verbose
         self.shuffle = shuffle
         self.optimizer = optimizer
 
         self.loss = get_loss(loss)
         self.loss_name = loss
-        # TODO: fix
-        if loss == "categorical_crossentropy":
-            self.loss_grad = lambda actual, predicted: -(actual - predicted)
-        else:
-            self.loss_grad = elementwise_grad(self.loss,1)
-
-        self.error_list=[]
-        self.metric_list=[]
+        self.loss_grad = get_gradient_loss(loss)
+        self.error_list= []
+        self.metric_list= []
+        self.loss_history= []
         self.testar_differros=testarerros
         self.metric = get_metric(metric)
         self.layers = layers
@@ -93,6 +127,13 @@ class NeuralNet(BaseEstimator):
         self._initialized = False
         self.uns=uns
         self.zeros=zeros
+        self.unst=count_ones
+        self.zerost=count_zeros
+        self.l2= l2
+        self.dropout=dropout
+        self.equilibrar_batches = False
+        self.filename=filename
+
 
 
     def _setup_layers(self, x_shape):
@@ -140,9 +181,7 @@ class NeuralNet(BaseEstimator):
         y_pred = self.fprop(X)
 
         # Backward pass
-        if self.loss_name == "automatic_weighted_binary_crossentropy":
-            grad = gradient_automatic_weighted_bce(y, y_pred, self.zeros,self.uns)
-        else :grad = self.loss_grad(y, y_pred)
+        grad = self.loss_grad(y, y_pred)
         for layer in reversed(self.layers[: self.bprop_entry]):
             grad = layer.backward_pass(grad)
 
@@ -161,9 +200,7 @@ class NeuralNet(BaseEstimator):
             self._setup_layers(X.shape)
 
         y = []
-        X_batch = batch_iterator(X, self.batch_size)
-        for Xb in X_batch:
-            y.append(self.fprop(Xb))
+        y.append(self.fprop(X))
         return np.concatenate(y)
 
     @property
