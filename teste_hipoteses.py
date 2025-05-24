@@ -30,31 +30,10 @@ def comparar_losses_metricas(df, alpha=0.05):
     df = df.copy()
     df[['f1', 'gmean']] = df.apply(lambda row: pd.Series(get_metricas(row)), axis=1)
 
-    pares = [
-        ("automatic_weighted_binary_crossentropy","binary_crossentropy"),
-        ("automatic_weighted_binary_crossentropy", "focal_loss"),
-        ("focal_loss","binary_crossentropy" )
-    ]
 
     for metrica in ['f1', 'gmean']:
         print(f"\n### MÉTRICA: {metrica.upper()} ###")
-        for l1, l2 in pares:
-            m1 = df[df['loss_nome'] == l1][metrica].values
-            m2 = df[df['loss_nome'] == l2][metrica].values
-
-            if len(m1) != len(m2):
-                print(f"\n Tamanhos diferentes: {l1} ({len(m1)}), {l2} ({len(m2)}). Ignorado.")
-                continue
-
-            # Teste unilateral: H1: m1 > m2
-            stat, p = stats.wilcoxon(m1, m2, alternative='greater')
-            conclusao = " MELHORIA SIGNIFICATIVA" if p < alpha else " NÃO HÁ MELHORIA SIGNIFICATIVA"
-
-            print(f"\n{l1} > {l2} ({metrica}) via Wilcoxon | p = {p:.4f} → {conclusao}")
-            if p < alpha:
-                print(f"→ Existe evidência estatística de que {l1} supera {l2} em {metrica.upper()}.")
-            else:
-                print(f"→ Não se pode afirmar com confiança que {l1} supera {l2} em {metrica.upper()}.\n")
+        
 
         
         print("\nTeste de Friedman")
