@@ -320,8 +320,8 @@ def plot_f1_score(subset, modo="cada"):
                 f1_test_weighted.append(f1_score(y_test, y_test_pred, average='weighted'))
 
             plt.figure(figsize=(6, 5))
-            plt.plot(range(1, epocas+1), f1_train_weighted, label=f'Train -{row["loss_nome"]}', marker='o')
-            plt.plot(range(1, epocas+1), f1_test_weighted, label=f'Test -{row["loss_nome"]}', marker='x')
+            plt.plot(range(1, epocas+1), f1_train_weighted, label=f'Test -{row["loss_nome"]}', marker='o')
+            plt.plot(range(1, epocas+1), f1_test_weighted, label=f'Train -{row["loss_nome"]}', marker='x')
             plt.xlabel('Época')
             plt.ylabel('F1 Score')
             plt.title(f'F1 Score - {row["ficheiro"]}')
@@ -389,8 +389,8 @@ def plot_gmean_score(subset, modo="cada"):
                 gmean_test.append(np.sqrt(np.prod(recall_test)))
 
             plt.figure(figsize=(6, 5))
-            plt.plot(range(1, epocas+1), gmean_train, label='Train', marker='o')
-            plt.plot(range(1, epocas+1), gmean_test, label='Test', marker='x')
+            plt.plot(range(1, epocas+1), gmean_train, label='Test', marker='o')
+            plt.plot(range(1, epocas+1), gmean_test, label='Train', marker='x')
             plt.xlabel('Época')
             plt.ylabel('Gmean')
             plt.title(f'Gmean por Época - {row["ficheiro"]}')
