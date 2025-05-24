@@ -9,81 +9,19 @@ import json
 import matplotlib.pyplot as plt
 from sklearn.metrics import recall_score
 import numpy as np
-'''
-Alteraçoes no ficheiro:
+from sklearn.metrics import precision_score, recall_score, roc_auc_score, confusion_matrix
+from IPython.display import display  # se estiver num ambiente Jupyter
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+import json
+import matplotlib.pyplot as plt
+from sklearn.metrics import roc_curve, auc, precision_score, recall_score
 
-def optimize(self, network):
-        loss_history = []
-        for i in range(network.max_epochs):
-            if network.shuffle:
-                network.shuffle_dataset()
-
-            start_time = time.time()
-            loss = self.train_epoch(network)
-            loss_history.append(loss)
-            
-            if network.verbose:
-                msg = "Epoch:%s, train loss: %s" % (i, loss)
-                if network.log_metric:
-                    msg += ", train %s: %s" % (network.metric_name, network.error(testar=network.testar_differros))
-                msg += ", elapsed: %s sec." % (time.time() - start_time)
-                logging.info(msg)
-        network.loss_history = loss_history
-        return loss_history
-
-def train_epoch(self, network):
-    losses = []
-    # Create batch iterator
-    X_batch = batch_iterator(network.X, network.batch_size)
-    y_batch = batch_iterator(network.y, network.batch_size)
-    batch = zip(X_batch, y_batch)
-    if network.verbose:
-        batch = tqdm(batch, total=int(np.ceil(network.n_samples / network.batch_size)))
-    for X, y in batch:
-        loss = np.mean(network.update(X, y))
-        self.update(network)
-        losses.append(loss)
-    espectativas_train = network._predict(network.X, network.y)
-    espectativas_test = network._predict(network.X_test, network.Y_test)
-    network.metric_list.append(espectativas_train, espectativas_test)
-    epoch_loss = np.mean(losses)
-    return epoch_loss
-
-        def __init__(
-        self, layers, optimizer, loss,l2,dropout, max_epochs=10, batch_size=64, metric="mse", shuffle=False, verbose=True,testarerros=False,zeros=0,uns=0
-    ):
-        self.verbose = verbose
-        self.shuffle = shuffle
-        self.optimizer = optimizer
-
-        self.loss = get_loss(loss)
-        self.loss_name = loss
-        # TODO: fix
-        if loss == "categorical_crossentropy":
-            self.loss_grad = lambda actual, predicted: -(actual - predicted)
-        else:
-            self.loss_grad = elementwise_grad(self.loss,1)
-
-        self.error_list= []
-        self.metric_list= []
-        self.loss_history= []
-        self.testar_differros=testarerros
-        self.metric = get_metric(metric)
-        self.layers = layers
-        self.batch_size = batch_size
-        self.max_epochs = max_epochs
-        self._n_layers = 0
-        self.log_metric = True if loss != metric else False
-        self.metric_name = metric
-        self.bprop_entry = self._find_bprop_entry()
-        self.training = False
-        self._initialized = False
-        self.uns=uns
-        self.zeros=zeros
-        self.l2= l2
-        self.dropout=dropout
-'''
-
+from sklearn.metrics import precision_score, recall_score, roc_curve, auc, confusion_matrix
+import matplotlib.pyplot as plt
+import json
+import numpy as np
+from sklearn.metrics import precision_recall_curve, PrecisionRecallDisplay
+from IPython.display import display_html
 
 
 def adicionar_modelo_ao_dataset(model, dataset=None):
@@ -427,13 +365,13 @@ def plot_gmean_score(subset, modo="cada"):
 
     if modo == "cada":
         plot_cada()
-    elif modo == "todos":
+    elif modo == "juntos":
         plot_todos()
-    elif modo == "ambos":
+    elif modo == "todos":
         plot_cada()
         plot_todos()
 
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+
 
 def plot_confusion_matrix(subset, modo="cada"):
     """
@@ -489,13 +427,13 @@ def plot_confusion_matrix(subset, modo="cada"):
 
     if modo == "cada":
         plot_cada()
-    elif modo == "todos":
+    elif modo == "juntos":
         plot_todos()
-    elif modo == "ambos":
+    elif modo == "todos":
         plot_cada()
         plot_todos()
 
-from sklearn.metrics import precision_recall_curve, PrecisionRecallDisplay
+
 
 def plot_precision_recall_curve_final(subset, modo="cada"):
     """
@@ -545,20 +483,13 @@ def plot_precision_recall_curve_final(subset, modo="cada"):
 
     if modo == "cada":
         plot_cada()
-    elif modo == "todos":
+    elif modo == "juntos":
         plot_todos()
-    elif modo == "ambos":
+    elif modo == "todos":
         plot_cada()
         plot_todos()
 
-import json
-import matplotlib.pyplot as plt
-from sklearn.metrics import roc_curve, auc, precision_score, recall_score
 
-from sklearn.metrics import precision_score, recall_score, roc_curve, auc, confusion_matrix
-import matplotlib.pyplot as plt
-import json
-import numpy as np
 
 def plot_metrics_vs_imbalance(dataset, 
                               modo='all', 
@@ -620,9 +551,10 @@ def plot_metrics_vs_imbalance(dataset,
         data[loss] = {'x': xs, **ys}
 
     def _plot_all(metric):
-        plt.figure(figsize=(8, 6))
+        plt.figure(figsize=(10, 8))
         for loss, vals in data.items():
-            plt.scatter(vals['x'], vals[metric], label=loss)
+            plt.scatter(vals['x'], vals[metric], label=loss,s=30)
+        plt.axvline(x=40, color='red', linestyle='--', label='Equilíbrio (minor/major = 40)')
         plt.xlabel("Desequilíbrio (minor/major)" + (" × total" if x_metric == 'weighted' else ""))
         plt.ylabel(metric.upper())
         plt.title(f"{metric.upper()} vs Desequilíbrio por Loss")
@@ -637,10 +569,13 @@ def plot_metrics_vs_imbalance(dataset,
             plt.scatter(vals['x'], vals[metric])
             plt.xlabel("Desequilíbrio (minor/major)" + (" × total" if x_metric == 'weighted' else ""))
             plt.ylabel(metric.upper())
+            plt.axvline(x=40, color='red', linestyle='--', label='Equilíbrio (minor/major = 40)')
             plt.title(f"{metric.upper()} vs Desequilíbrio\nLoss: {loss}")
             plt.grid(True)
+            plt.xlim(0, 800) 
             plt.tight_layout()
             plt.show()
+            
 
     for metric in metrics:
         if modo in ('all', 'both', 'todos'):
@@ -648,9 +583,87 @@ def plot_metrics_vs_imbalance(dataset,
         if modo in ('each', 'both', 'todos'):
             _plot_each(metric)
 
-df = pd.read_csv("resultados.csv")
-plotar_graficos("resultados.csv",
-                            gmean_vs_ratio=True,
-                            modo_ratio='weighted',
-                            modo_visual='todos')
+def gerar_tabelas_percentuais_metricas(dataset, limiares=(0.5, 0.7, 0.8, 0.9), min_test_size=100):
+    """
+    Gera e exibe tabelas lado a lado com o NÚMERO de execuções acima dos limiares
+    para as métricas: ROC AUC, Precision, Recall, Gmean. Cada tabela representa
+    um tipo de loss (loss_nome). Só considera execuções com y_test >= min_test_size.
+
+    Args:
+        dataset (str ou pd.DataFrame): Caminho para CSV ou DataFrame.
+        limiares (tuple): Limiares de avaliação para as métricas.
+        min_test_size (int): Número mínimo de amostras em y_test para ser incluído.
+    """
+    tabelas_html = []
+
+    for perda in dataset['loss_nome'].unique():
+        sub = dataset[dataset['loss_nome'] == perda]
+
+        valores_metricas = {'ROC AUC': [], 'Precision': [], 'Recall': [], 'Gmean': []}
+
+        for _, row in sub.iterrows():
+            y_test = json.loads(row['test_out'])
+
+            if len(y_test) < min_test_size:
+                continue
+
+            probs = json.loads(row['probs'])
+            ep = int(row['epocas']) - 1
+            prob_pos = [p[1] for p in probs[ep][1]]
+            y_pred = [1 if p > 0.5 else 0 for p in prob_pos] # Limiar de 0.5 para classificação binária
+
+            try:
+                roc = roc_auc_score(y_test, prob_pos)
+            except ValueError: # Adicionado para tratar casos onde roc_auc_score não pode ser calculado
+                roc = 0.0
+
+            prec = precision_score(y_test, y_pred, zero_division=0)
+            rec = recall_score(y_test, y_pred, zero_division=0)
+
+            cm = confusion_matrix(y_test, y_pred).ravel()
+            if len(cm) == 4:
+                tn, fp, fn, tp = cm
+                sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0
+                specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
+                gmean = np.sqrt(sensitivity * specificity) if (sensitivity * specificity) >= 0 else 0 # Garantir não raiz de negativo
+            else: # Caso não seja possível calcular a matriz de confusão completa (e.g., só uma classe predita)
+                gmean = 0.0
+
+            valores_metricas['ROC AUC'].append(roc)
+            valores_metricas['Precision'].append(prec)
+            valores_metricas['Recall'].append(rec)
+            valores_metricas['Gmean'].append(gmean)
+
+        if not any(valores_metricas.values()): # Verifica se alguma lista de métricas tem valores
+            continue
+
+        if len(valores_metricas['ROC AUC']) == 0 and \
+           len(valores_metricas['Precision']) == 0 and \
+           len(valores_metricas['Recall']) == 0 and \
+           len(valores_metricas['Gmean']) == 0:
+            continue
+
+
+        tabela = pd.DataFrame(index=list(valores_metricas.keys())) # Garante a ordem das métricas
+        for limiar_valor in limiares: # Renomeado para clareza, ex: 0.5, 0.7
+            coluna_contagens = []
+            for metrica_nome in tabela.index:
+                valores_da_metrica = np.array(valores_metricas[metrica_nome])
+                if len(valores_da_metrica) == 0: # Se não houver valores para esta métrica
+                    contagem = 0
+                else:
+                    contagem = np.sum(valores_da_metrica >= limiar_valor)
+                coluna_contagens.append(contagem)
+            tabela[f'{int(limiar_valor * 100)}%'] = coluna_contagens
+
+        html = f'<h3 style="text-align:center">{perda}</h3>' + tabela.to_html(escape=False)
+        tabelas_html.append(html)
+
+    if tabelas_html:
+        display_html(''.join(
+            [f'<div style="display:inline-block; margin-right:20px; vertical-align:top;">{t}</div>' for t in tabelas_html]
+        ), raw=True)
+    else:
+        print(f"Nenhuma 'loss_nome' com pelo menos {min_test_size} amostras em y_test ou sem dados de métricas válidos.")
+
 
