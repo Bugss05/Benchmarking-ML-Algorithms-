@@ -5,6 +5,7 @@ from sklearn.metrics import f1_score, confusion_matrix
 import matplotlib.pyplot as plt
 import json
 from scikit_posthocs import posthoc_nemenyi_friedman
+from IPython.display import display
 
 def comparar_losses_metricas(df, alpha=0.05):
     def get_metricas(row):
@@ -54,7 +55,7 @@ def comparar_losses_metricas(df, alpha=0.05):
                     df.pivot_table(index='id', columns='loss_nome', values=metrica)
                 )
                 print("\nResultados do teste post-hoc de Nemenyi:")
-                print(posthoc_results)
+                print(posthoc_results.to_string(float_format="{:.4f}".format))
                 print("\nComparações significativas:")
                 for i in range(len(posthoc_results)):
                     for j in range(i + 1, len(posthoc_results)):
