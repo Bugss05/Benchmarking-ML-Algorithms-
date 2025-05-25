@@ -1,3 +1,4 @@
+
 # Benchmarking de Algoritmos de Machine Learning
 
 Este repositório contém uma coleção de scripts e notebooks para comparar o desempenho de diferentes algoritmos de machine learning em várias tarefas de classificação e regressão. O objetivo é fornecer uma base para avaliar e comparar modelos de forma eficiente.
