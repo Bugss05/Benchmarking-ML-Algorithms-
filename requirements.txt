@@ -1,8 +1,11 @@
-tqdm
-matplotlib>=1.5.1
 numpy>=1.11.1
-scikit-learn>=0.18
+pandas
+matplotlib>=1.5.1
 scipy>=0.18.0
+scikit-learn>=0.18
+scikit-posthocs
+ipython
+tqdm
 seaborn>=0.7.1
 autograd>=1.1.7
 gym

@@ -1,27 +1,17 @@
+import json
+import numpy as np
 import pandas as pd
-import json
 import matplotlib.pyplot as plt
-from sklearn.metrics import roc_curve, auc
-import json
-import matplotlib.pyplot as plt
-from sklearn.metrics import f1_score
-import json
-import matplotlib.pyplot as plt
-from sklearn.metrics import recall_score
-import numpy as np
-from sklearn.metrics import precision_score, recall_score, roc_auc_score, confusion_matrix
-from IPython.display import display  # se estiver num ambiente Jupyter
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
-import json
-import matplotlib.pyplot as plt
-from sklearn.metrics import roc_curve, auc, precision_score, recall_score
 
-from sklearn.metrics import precision_score, recall_score, roc_curve, auc, confusion_matrix
-import matplotlib.pyplot as plt
-import json
-import numpy as np
-from sklearn.metrics import precision_recall_curve, PrecisionRecallDisplay
-from IPython.display import display_html
+from IPython.display import display, display_html  # Para uso em Jupyter Notebooks
+
+from sklearn.metrics import (
+    roc_curve, auc, roc_auc_score,
+    f1_score, precision_score, recall_score,
+    confusion_matrix, ConfusionMatrixDisplay,
+    precision_recall_curve, PrecisionRecallDisplay
+)
+
 
 
 def adicionar_modelo_ao_dataset(model, dataset=None):
